@@ -35,7 +35,9 @@ From the raw reports alone, the pipeline picks up safety stories that made the n
 | The Databricks deployment | [`databricks.yml`](databricks.yml): Unity Catalog schema, volume, serverless job, dashboard |
 | The tests | [`tests/test_transforms.py`](tests/test_transforms.py): statistics checked against hand-computed 2×2 tables |
 
-![FAERS Signal Radar dashboard on Databricks](docs/img/dashboard.png)
+![FAERS Signal Radar dashboard on Databricks: drug explorer page](docs/img/dashboard.png)
+
+![FAERS Signal Radar dashboard on Databricks: emerging signals page](docs/img/emerging-signals.png)
 
 ## Architecture
 
@@ -85,8 +87,8 @@ drug–reaction pairs. That takes ~47s locally on a MacBook and ~4 min end to en
 | **Databricks CLI + GitHub Actions** | Lint and tests on every PR, bundle deploy on merge to `main` | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml) |
 
 Everything runs on **Databricks Free Edition**. The workspace needs a login, so the
-dashboard is also exported as a [screenshot](docs/img/dashboard.png) and a
-[PDF](docs/faers-signal-radar.pdf).
+dashboard is also exported as screenshots ([drug explorer](docs/img/dashboard.png),
+[emerging signals](docs/img/emerging-signals.png)) and a [PDF](docs/faers-signal-radar.pdf).
 
 CI ([`ci.yml`](.github/workflows/ci.yml)) runs lint and tests on every PR. Deploys
 ([`deploy.yml`](.github/workflows/deploy.yml)) run on merge to `main` and need the
