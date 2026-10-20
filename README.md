@@ -45,6 +45,16 @@ databricks fs cp -r data/raw dbfs:/Volumes/workspace/faers/raw --overwrite
 databricks bundle run faers_pipeline
 ```
 
+The bundle also deploys and publishes the **FAERS Signal Radar** AI/BI dashboard
+(`src/dashboards/faers_radar.lvdash.json`). It has a drug explorer (reports and robust
+signals per quarter, top reactions, every signal) and an emerging-signals page (pairs
+flagged for the first time in the latest quarter). After editing dataset SQL, check it
+against your warehouse:
+
+```bash
+python3 scripts/check_dashboard_sql.py <warehouse_id>
+```
+
 Serverless compute can't reach arbitrary internet hosts, so raw files are landed
 in a Unity Catalog Volume from outside. That's the same landing-zone pattern used
 when ingesting from an external system.
