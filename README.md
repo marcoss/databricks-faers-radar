@@ -4,6 +4,8 @@ Drug safety signal detection over the FDA Adverse Event Reporting System (FAERS)
 built with Apache Spark and Delta Lake. The same code runs on a laptop and on
 Databricks (serverless), and is deployed with a Databricks Asset Bundle.
 
+![FAERS Signal Radar dashboard on Databricks](docs/img/dashboard.png)
+
 ```
 FDA quarterly zips ─► scripts/download.sh ─► data/raw  or  /Volumes/<catalog>/faers/raw
                                                 │
