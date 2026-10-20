@@ -7,3 +7,4 @@ __pycache__/
 spark-warehouse/
 metastore_db/
 derby.log
+.DS_Store
