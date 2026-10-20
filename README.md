@@ -4,6 +4,8 @@ Drug safety signal detection over the FDA Adverse Event Reporting System (FAERS)
 built with Apache Spark and Delta Lake. The same code runs on a laptop and on
 Databricks (serverless), and is deployed with a Databricks Asset Bundle.
 
+![FAERS Signal Radar dashboard on Databricks](docs/img/dashboard.png)
+
 ```
 FDA quarterly zips ─► scripts/download.sh ─► data/raw  or  /Volumes/<catalog>/faers/raw
                                                 │
@@ -43,6 +45,16 @@ uv run faers-radar all              # writes Delta tables to data/lake/
 databricks bundle deploy                         # builds the wheel, creates schema, volume, job
 databricks fs cp -r data/raw dbfs:/Volumes/workspace/faers/raw --overwrite
 databricks bundle run faers_pipeline
+```
+
+The bundle also deploys and publishes the **FAERS Signal Radar** AI/BI dashboard
+(`src/dashboards/faers_radar.lvdash.json`). It has a drug explorer (reports and robust
+signals per quarter, top reactions, every signal) and an emerging-signals page (pairs
+flagged for the first time in the latest quarter). After editing dataset SQL, check it
+against your warehouse:
+
+```bash
+python3 scripts/check_dashboard_sql.py <warehouse_id>
 ```
 
 Serverless compute can't reach arbitrary internet hosts, so raw files are landed

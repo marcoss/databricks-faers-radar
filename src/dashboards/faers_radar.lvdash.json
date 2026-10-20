@@ -1,0 +1,441 @@
+{
+  "datasets": [
+    {
+      "name": "ds_quarter",
+      "displayName": "Reports and signals per quarter",
+      "queryLines": [
+        "WITH c AS (SELECT period, count(*) AS reports FROM silver_cases GROUP BY period), ",
+        "s AS (SELECT period, count_if(is_signal AND cases >= 10) AS robust_signals, ",
+        "count(DISTINCT CASE WHEN is_signal AND cases >= 10 THEN drug END) AS drugs_with_signal ",
+        "FROM gold_signals GROUP BY period) ",
+        "SELECT make_date(int(substr(period, 1, 4)), (int(substr(period, 6, 1)) - 1) * 3 + 1, 1) AS quarter_start, ",
+        "period, reports, robust_signals, ",
+        "CASE WHEN period = max(period) OVER () THEN robust_signals END AS latest_robust_signals, ",
+        "CASE WHEN period = max(period) OVER () THEN drugs_with_signal END AS latest_drugs_with_signal ",
+        "FROM c JOIN s USING (period) ",
+        "ORDER BY quarter_start"
+      ]
+    },
+    {
+      "name": "ds_drug_quarter",
+      "displayName": "Per-drug reports and signals per quarter",
+      "queryLines": [
+        "WITH d AS (SELECT period, drug, max(cases + b) AS reports, ",
+        "count_if(is_signal AND cases >= 10) AS robust_signals ",
+        "FROM gold_signals GROUP BY period, drug), ",
+        "big AS (SELECT drug FROM d GROUP BY drug HAVING sum(reports) >= 500) ",
+        "SELECT make_date(int(substr(period, 1, 4)), (int(substr(period, 6, 1)) - 1) * 3 + 1, 1) AS quarter_start, ",
+        "period, drug, reports, robust_signals ",
+        "FROM d JOIN big USING (drug) ",
+        "ORDER BY quarter_start"
+      ]
+    },
+    {
+      "name": "ds_top_reactions",
+      "displayName": "Top signal reactions per drug, latest quarter",
+      "queryLines": [
+        "SELECT drug, pt, cases, prr, ror, ror_lower, ror_upper, chi2 FROM ( ",
+        "SELECT *, row_number() OVER (PARTITION BY drug ORDER BY cases DESC, ror_lower DESC) AS rn ",
+        "FROM gold_signals ",
+        "WHERE is_signal AND cases >= 10 AND period = (SELECT max(period) FROM gold_signals) ",
+        ") WHERE rn <= 15 ",
+        "ORDER BY drug, cases DESC"
+      ]
+    },
+    {
+      "name": "ds_signal_detail",
+      "displayName": "All robust signals",
+      "queryLines": [
+        "SELECT period, drug, pt, cases, round(prr, 1) AS prr, round(ror, 1) AS ror, ",
+        "round(ror_lower, 1) AS ror_lower, round(ror_upper, 1) AS ror_upper, round(chi2, 0) AS chi2 ",
+        "FROM gold_signals ",
+        "WHERE is_signal AND cases >= 10 ",
+        "ORDER BY period DESC, cases DESC"
+      ]
+    },
+    {
+      "name": "ds_emerging",
+      "displayName": "Emerging signals (new in latest quarter)",
+      "queryLines": [
+        "WITH latest AS (SELECT max(period) AS p FROM gold_signals), ",
+        "prior AS (SELECT DISTINCT drug, pt FROM gold_signals, latest WHERE period < p AND is_signal), ",
+        "cur AS (SELECT g.* FROM gold_signals g, latest WHERE g.period = p AND is_signal AND cases >= 10) ",
+        "SELECT cur.period, cur.drug, cur.pt, cur.cases, round(cur.prr, 1) AS prr, ",
+        "round(cur.ror_lower, 1) AS ror_lower, round(cur.chi2, 0) AS chi2 ",
+        "FROM cur LEFT ANTI JOIN prior ON cur.drug = prior.drug AND cur.pt = prior.pt ",
+        "ORDER BY cur.cases DESC"
+      ]
+    },
+    {
+      "name": "ds_emerging_by_drug",
+      "displayName": "Drugs with the most emerging signals",
+      "queryLines": [
+        "WITH latest AS (SELECT max(period) AS p FROM gold_signals), ",
+        "prior AS (SELECT DISTINCT drug, pt FROM gold_signals, latest WHERE period < p AND is_signal), ",
+        "cur AS (SELECT g.* FROM gold_signals g, latest WHERE g.period = p AND is_signal AND cases >= 10) ",
+        "SELECT cur.drug, count(*) AS new_signals, sum(cur.cases) AS new_signal_cases ",
+        "FROM cur LEFT ANTI JOIN prior ON cur.drug = prior.drug AND cur.pt = prior.pt ",
+        "GROUP BY cur.drug ORDER BY new_signals DESC LIMIT 15"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "drug_explorer",
+      "displayName": "Drug explorer",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# FAERS Signal Radar\n",
+                "\n",
+                "Disproportionality signals from FDA adverse event reports, computed with Apache Spark. A *robust signal* meets the Evans criteria (PRR ≥ 2, χ² ≥ 4, ROR 95% CI lower bound > 1) with at least 10 cases. Signals reflect reporting patterns, not causation."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi-reports",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_quarter",
+                "fields": [
+                  {"name": "sum(reports)", "expression": "SUM(`reports`)"},
+                  {"name": "quarter_start", "expression": "`quarter_start`"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(reports)",
+                  "displayName": "Case reports analyzed",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+                },
+                "period": {"fieldName": "quarter_start"}
+              },
+              "frame": {"showTitle": true, "title": "Case reports analyzed", "showDescription": true, "description": "Deduplicated cases, latest quarter (trend behind)"}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-signals",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_quarter",
+                "fields": [
+                  {"name": "sum(latest_robust_signals)", "expression": "SUM(`latest_robust_signals`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(latest_robust_signals)",
+                  "displayName": "Robust signals",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Robust signals", "showDescription": true, "description": "Drug–reaction pairs, latest quarter"}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-drugs",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_quarter",
+                "fields": [
+                  {"name": "sum(latest_drugs_with_signal)", "expression": "SUM(`latest_drugs_with_signal`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(latest_drugs_with_signal)",
+                  "displayName": "Drugs with a robust signal",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+                }
+              },
+              "frame": {"showTitle": true, "title": "Drugs with a robust signal", "showDescription": true, "description": "Latest quarter"}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "filter-drug",
+            "queries": [
+              {"name": "q_drug_quarter", "query": {"datasetName": "ds_drug_quarter", "fields": [{"name": "drug", "expression": "`drug`"}], "disaggregated": false}},
+              {"name": "q_top_reactions", "query": {"datasetName": "ds_top_reactions", "fields": [{"name": "drug", "expression": "`drug`"}], "disaggregated": false}},
+              {"name": "q_signal_detail", "query": {"datasetName": "ds_signal_detail", "fields": [{"name": "drug", "expression": "`drug`"}], "disaggregated": false}}
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {"fieldName": "drug", "displayName": "Drug", "queryName": "q_drug_quarter"},
+                  {"fieldName": "drug", "displayName": "Drug", "queryName": "q_top_reactions"},
+                  {"fieldName": "drug", "displayName": "Drug", "queryName": "q_signal_detail"}
+                ]
+              },
+              "selection": {"defaultSelection": {"values": {"dataType": "STRING", "values": [{"value": "SEMAGLUTIDE"}]}}},
+              "frame": {"showTitle": true, "title": "Drug (active ingredient)"}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 4, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "filter-help",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Pick a drug to see how often it is reported each quarter, its strongest reactions this quarter, and every robust signal. The list covers drugs with 500+ reports. Try **TIRZEPATIDE**, **DUPILUMAB** or **COPPER** (IUDs)."
+              ]
+            }
+          },
+          "position": {"x": 4, "y": 5, "width": 8, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "drug-reports-trend",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_drug_quarter",
+                "fields": [
+                  {"name": "quarter_start", "expression": "`quarter_start`"},
+                  {"name": "sum(reports)", "expression": "SUM(`reports`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "quarter_start", "scale": {"type": "temporal"}, "displayName": "Quarter"},
+                "y": {"fieldName": "sum(reports)", "scale": {"type": "quantitative"}, "displayName": "Case reports"}
+              },
+              "frame": {"showTitle": true, "title": "Case reports per quarter"}
+            }
+          },
+          "position": {"x": 0, "y": 7, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "drug-signals-trend",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_drug_quarter",
+                "fields": [
+                  {"name": "quarter_start", "expression": "`quarter_start`"},
+                  {"name": "sum(robust_signals)", "expression": "SUM(`robust_signals`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "quarter_start", "scale": {"type": "temporal"}, "displayName": "Quarter"},
+                "y": {"fieldName": "sum(robust_signals)", "scale": {"type": "quantitative"}, "displayName": "Robust signals"}
+              },
+              "frame": {"showTitle": true, "title": "Robust signals per quarter"}
+            }
+          },
+          "position": {"x": 6, "y": 7, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "top-reactions",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_top_reactions",
+                "fields": [
+                  {"name": "pt", "expression": "`pt`"},
+                  {"name": "sum(cases)", "expression": "SUM(`cases`)"},
+                  {"name": "max(ror_lower)", "expression": "MAX(`ror_lower`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "sum(cases)", "scale": {"type": "quantitative"}, "displayName": "Cases"},
+                "y": {"fieldName": "pt", "scale": {"type": "categorical", "sort": {"by": "x-reversed"}}, "displayName": "Reaction"},
+                "extra": [{"fieldName": "max(ror_lower)", "displayName": "ROR lower 95% CI"}]
+              },
+              "frame": {"showTitle": true, "title": "Most-reported signal reactions, latest quarter", "showDescription": true, "description": "Top 15 robust signals by case count"}
+            }
+          },
+          "position": {"x": 0, "y": 13, "width": 12, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "signal-table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_signal_detail",
+                "fields": [
+                  {"name": "period", "expression": "`period`"},
+                  {"name": "pt", "expression": "`pt`"},
+                  {"name": "cases", "expression": "`cases`"},
+                  {"name": "prr", "expression": "`prr`"},
+                  {"name": "ror", "expression": "`ror`"},
+                  {"name": "ror_lower", "expression": "`ror_lower`"},
+                  {"name": "ror_upper", "expression": "`ror_upper`"},
+                  {"name": "chi2", "expression": "`chi2`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "period", "displayName": "Quarter"},
+                  {"fieldName": "pt", "displayName": "Reaction (MedDRA PT)"},
+                  {"fieldName": "cases", "displayName": "Cases"},
+                  {"fieldName": "prr", "displayName": "PRR"},
+                  {"fieldName": "ror", "displayName": "ROR"},
+                  {"fieldName": "ror_lower", "displayName": "ROR 95% CI low"},
+                  {"fieldName": "ror_upper", "displayName": "ROR 95% CI high"},
+                  {"fieldName": "chi2", "displayName": "χ²"}
+                ]
+              },
+              "frame": {"showTitle": true, "title": "All robust signals for this drug"}
+            }
+          },
+          "position": {"x": 0, "y": 20, "width": 12, "height": 8}
+        }
+      ]
+    },
+    {
+      "name": "emerging",
+      "displayName": "Emerging signals",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "emerging-title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Emerging signals\n",
+                "\n",
+                "Robust signals in the latest quarter for drug–reaction pairs that were **never** flagged in an earlier quarter. This is the shortlist a pharmacovigilance reviewer would triage first."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "emerging-by-drug",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_emerging_by_drug",
+                "fields": [
+                  {"name": "drug", "expression": "`drug`"},
+                  {"name": "sum(new_signals)", "expression": "SUM(`new_signals`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "sum(new_signals)", "scale": {"type": "quantitative"}, "displayName": "New signals"},
+                "y": {"fieldName": "drug", "scale": {"type": "categorical", "sort": {"by": "x-reversed"}}, "displayName": "Drug"}
+              },
+              "frame": {"showTitle": true, "title": "Drugs with the most new signals"}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 12, "height": 7}
+        },
+        {
+          "widget": {
+            "name": "emerging-table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_emerging",
+                "fields": [
+                  {"name": "drug", "expression": "`drug`"},
+                  {"name": "pt", "expression": "`pt`"},
+                  {"name": "cases", "expression": "`cases`"},
+                  {"name": "prr", "expression": "`prr`"},
+                  {"name": "ror_lower", "expression": "`ror_lower`"},
+                  {"name": "chi2", "expression": "`chi2`"}
+                ],
+                "disaggregated": true
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "drug", "displayName": "Drug"},
+                  {"fieldName": "pt", "displayName": "Reaction (MedDRA PT)"},
+                  {"fieldName": "cases", "displayName": "Cases"},
+                  {"fieldName": "prr", "displayName": "PRR"},
+                  {"fieldName": "ror_lower", "displayName": "ROR 95% CI low"},
+                  {"fieldName": "chi2", "displayName": "χ²"}
+                ]
+              },
+              "frame": {"showTitle": true, "title": "New robust signals, latest quarter"}
+            }
+          },
+          "position": {"x": 0, "y": 9, "width": 12, "height": 9}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#F7F8FA", "dark": "#14191F"},
+      "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#1C232B"},
+      "widgetBorderColor": {"light": "#FFFFFF", "dark": "#1C232B"},
+      "fontColor": {"light": "#14213D", "dark": "#E8ECF0"},
+      "selectionColor": {"light": "#2272B4", "dark": "#8ACAFF"},
+      "visualizationColors": ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#D55E00", "#56B4E9", "#F0E442"],
+      "widgetHeaderAlignment": "LEFT",
+      "widgetCornerRadius": 8
+    }
+  }
+}

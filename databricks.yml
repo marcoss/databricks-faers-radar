@@ -6,6 +6,9 @@ variables:
     default: workspace # Free Edition's default catalog
   schema:
     default: faers
+  warehouse_id:
+    lookup:
+      warehouse: Serverless Starter Warehouse # Free Edition's built-in warehouse
 
 artifacts:
   default:
@@ -26,6 +29,14 @@ resources:
       schema_name: ${resources.schemas.faers.name}
       name: raw
       comment: Landing zone for FAERS quarterly extracts (uploaded from scripts/download.sh)
+
+  dashboards:
+    faers_radar:
+      display_name: FAERS Signal Radar
+      file_path: ./src/dashboards/faers_radar.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema}
 
   jobs:
     faers_pipeline:
