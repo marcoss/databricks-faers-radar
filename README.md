@@ -21,6 +21,41 @@ FDA quarterly zips ─► scripts/download.sh ─► data/raw  or  /Volumes/<cat
                                                 per (quarter, drug, reaction)
 ```
 
+## Where Apache Spark is used
+
+All of the data processing is Apache Spark 4 (PySpark DataFrame API). There is no pandas and
+there are no Python UDFs. Spark runs as `local[*]` on a laptop and as serverless compute on
+Databricks, with no code changes between them.
+
+| Stage | Spark work | Code |
+|---|---|---|
+| Bronze | Multi-file CSV reads (`$`-delimited, quoting off, file-name metadata via `_metadata`), Delta writes | [`io.py`](src/faers_radar/io.py) |
+| Silver: dedup | `Window.partitionBy("caseid")` + `row_number()` to keep the latest case version, `left_anti` join to drop deleted cases | [`transforms.py`](src/faers_radar/transforms.py) |
+| Silver: normalization | Native `regexp_replace` / `upper` / `when` column expressions to map free-text drug names to a canonical key | [`transforms.py`](src/faers_radar/transforms.py) |
+| Gold: statistics | Per-case drug × reaction join (the big shuffle), `groupBy` counts, `left_semi` joins, broadcast join of per-quarter totals, PRR/ROR/χ² with `try_divide` | [`transforms.py`](src/faers_radar/transforms.py) |
+| Tests | `pyspark.testing.assertDataFrameEqual` against hand-computed 2×2 tables | [`tests/`](tests/test_transforms.py) |
+| Dashboard | Dataset queries run on a Databricks SQL warehouse (Spark SQL with window functions, CTEs, anti-joins) | [`faers_radar.lvdash.json`](src/dashboards/faers_radar.lvdash.json) |
+
+Scale on two quarters (2026Q1–Q2): ~6.9M raw rows → 792K deduplicated cases → 469K scored
+drug–reaction pairs. That takes ~47s locally on a MacBook and ~4 min end to end as a serverless job.
+
+## Databricks products used
+
+| Product | Role in this project | Defined in |
+|---|---|---|
+| **Databricks Asset Bundles** | Everything below is deployed with `databricks bundle deploy` | [`databricks.yml`](databricks.yml) |
+| **Unity Catalog** | `workspace.faers` schema and bronze/silver/gold Delta tables, with lineage | [`databricks.yml`](databricks.yml), [`io.py`](src/faers_radar/io.py) |
+| **Unity Catalog Volumes** | Landing zone for raw FDA files (serverless can't download them itself) | [`databricks.yml`](databricks.yml) |
+| **Lakeflow Jobs on serverless compute** | 3-task bronze → silver → gold job running a Python wheel, quarterly schedule | [`databricks.yml`](databricks.yml) |
+| **Delta Lake** | Storage format for every table, locally and in Unity Catalog | [`io.py`](src/faers_radar/io.py) |
+| **AI/BI Dashboards** | Published *FAERS Signal Radar* dashboard (drug explorer and emerging signals) | [`faers_radar.lvdash.json`](src/dashboards/faers_radar.lvdash.json) |
+| **Databricks SQL (serverless warehouse)** | Serves the dashboard queries | [`databricks.yml`](databricks.yml) |
+| **Databricks CLI + GitHub Actions** | Lint and tests on every PR, bundle deploy on merge to `main` | [`ci.yml`](.github/workflows/ci.yml) |
+
+Everything runs on **Databricks Free Edition**. The workspace needs a login, so the
+dashboard is also exported as a [screenshot](docs/img/dashboard.png) and a
+[PDF](docs/faers-signal-radar.pdf).
+
 ## Data
 
 FDA publishes one zip per quarter at
