@@ -5,8 +5,6 @@
 ![Databricks](https://img.shields.io/badge/Databricks-Free%20Edition-FF3621?logo=databricks&logoColor=white)
 ![Delta Lake](https://img.shields.io/badge/Delta%20Lake-4.0-00ADD4)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-
 **An Apache Spark pipeline that scans ~800K FDA adverse-event reports per run and surfaces
 drug safety signals.** It runs on Databricks serverless, is deployed as code with Asset
 Bundles, and ships with a published AI/BI dashboard.
@@ -103,9 +101,6 @@ FDA publishes one zip per quarter at
 ```bash
 scripts/download.sh 2024Q1 2026Q2   # 2014Q3 or later; file layout differs before that
 ```
-
-FAERS data is public and published by the U.S. Food and Drug Administration. This project is
-not affiliated with or endorsed by the FDA. Raw data is not stored in this repository.
 
 ## Run locally
 
