@@ -5,9 +5,12 @@
 ![Databricks](https://img.shields.io/badge/Databricks-Free%20Edition-FF3621?logo=databricks&logoColor=white)
 ![Delta Lake](https://img.shields.io/badge/Delta%20Lake-4.0-00ADD4)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+
 **An Apache Spark pipeline that scans ~800K FDA adverse-event reports per run and surfaces
 drug safety signals.** It runs on Databricks serverless, is deployed as code with Asset
 Bundles, and ships with a published AI/BI dashboard.
+
+**Status:** portfolio prototype, not production-ready. See [Prototype scope](#prototype-scope).
 
 ## What it finds
 
@@ -22,9 +25,6 @@ From the raw reports alone, the pipeline picks up safety stories that made the n
   emptying**, both publicly discussed GLP-1 concerns.
 - **Copper IUD → device breakage.** More than 2,000 reports in a quarter each of **device breakage** and
   **complications of device removal**, matching widely reported Paragard complaints.
-
-> Disproportionality shows that a reaction is reported unusually often with a drug. It does
-> not prove the drug causes it. See [Limitations](#limitations).
 
 ## 60-second tour
 
@@ -166,9 +166,17 @@ secondary suspect drugs (`PS`, `SS`) count, not concomitant ones.
 - **One codebase, two runtimes.** `get_spark()` returns Databricks' session when present,
   otherwise a local Delta-enabled one. Targets are a path locally or `catalog.schema` in Unity Catalog.
 
-## Limitations
+## Prototype scope
 
-Disproportionality measures reporting patterns, not causation. FAERS is voluntary and
-subject to stimulated reporting (media attention drives reports), duplicates, and missing
-data. Drug names not mapped by FDA to an active ingredient are cleaned heuristically, so
-brand and generic names can split one drug into several keys.
+What a production version would add:
+
+- **Incremental ingestion.** Each run rebuilds every table. Production would use Auto Loader
+  and `MERGE` so only new quarters are processed.
+- **Drug name mapping.** Names FDA hasn't mapped to an active ingredient are cleaned with
+  regexes, so a brand and its generic can split into separate keys. Mapping to RxNorm would fix this.
+- **Data quality checks.** Row-count and null-rate expectations between layers (e.g. Lakeflow
+  Declarative Pipelines expectations) before gold is published.
+- **Signal context.** Scores reflect how often reactions are reported, not causation. They are
+  also inflated by media-driven reporting spikes and don't separate a drug's indication from its
+  side effects.
+- **Separate dev and prod targets** with their own catalogs and a service principal for deploys.
