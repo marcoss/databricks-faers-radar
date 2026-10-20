@@ -1,0 +1,32 @@
+[project]
+name = "faers-radar"
+version = "0.1.0"
+description = "Drug safety signal detection on FDA FAERS with Apache Spark"
+readme = "README.md"
+requires-python = ">=3.11"
+# No runtime deps: Databricks provides Spark. Local Spark lives in the dev group.
+dependencies = []
+
+[project.scripts]
+faers-radar = "faers_radar.pipeline:main"
+
+[dependency-groups]
+dev = [
+    "pyspark==4.0.*",
+    "delta-spark==4.0.*",
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/faers_radar"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

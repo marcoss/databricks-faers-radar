@@ -1,0 +1,73 @@
+bundle:
+  name: faers-radar
+
+variables:
+  catalog:
+    default: workspace # Free Edition's default catalog
+  schema:
+    default: faers
+
+artifacts:
+  default:
+    type: whl
+    build: uv build --wheel
+    path: .
+
+resources:
+  schemas:
+    faers:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: FAERS drug safety signal radar
+
+  volumes:
+    raw:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.faers.name}
+      name: raw
+      comment: Landing zone for FAERS quarterly extracts (uploaded from scripts/download.sh)
+
+  jobs:
+    faers_pipeline:
+      name: faers-radar-pipeline
+      # FAERS publishes each quarter a few months after it closes.
+      schedule:
+        quartz_cron_expression: "0 0 6 1 2,5,8,11 ?"
+        timezone_id: UTC
+        pause_status: PAUSED
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ./dist/*.whl
+      tasks:
+        - task_key: bronze
+          environment_key: default
+          python_wheel_task:
+            package_name: faers_radar
+            entry_point: faers-radar
+            parameters:
+              - bronze
+              - --raw
+              - /Volumes/${var.catalog}/${var.schema}/raw
+              - --target
+              - ${var.catalog}.${var.schema}
+        - task_key: silver
+          depends_on: [{ task_key: bronze }]
+          environment_key: default
+          python_wheel_task:
+            package_name: faers_radar
+            entry_point: faers-radar
+            parameters: [silver, --target, "${var.catalog}.${var.schema}"]
+        - task_key: gold
+          depends_on: [{ task_key: silver }]
+          environment_key: default
+          python_wheel_task:
+            package_name: faers_radar
+            entry_point: faers-radar
+            parameters: [gold, --target, "${var.catalog}.${var.schema}"]
+
+targets:
+  dev:
+    default: true
