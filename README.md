@@ -6,6 +6,8 @@ Databricks (serverless), and is deployed with a Databricks Asset Bundle.
 
 ![FAERS Signal Radar dashboard on Databricks](docs/img/dashboard.png)
 
+Full dashboard export: [docs/faers-signal-radar.pdf](docs/faers-signal-radar.pdf)
+
 ```
 FDA quarterly zips ─► scripts/download.sh ─► data/raw  or  /Volumes/<catalog>/faers/raw
                                                 │
