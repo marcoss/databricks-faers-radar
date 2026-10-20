@@ -1,0 +1,9 @@
+data/
+dist/
+.venv/
+.databricks/
+__pycache__/
+*.egg-info/
+spark-warehouse/
+metastore_db/
+derby.log
