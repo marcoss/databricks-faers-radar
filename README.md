@@ -1,25 +1,59 @@
 # FAERS Signal Radar
 
-Drug safety signal detection over the FDA Adverse Event Reporting System (FAERS),
-built with Apache Spark and Delta Lake. The same code runs on a laptop and on
-Databricks (serverless), and is deployed with a Databricks Asset Bundle.
+[![CI](https://github.com/marcoss/databricks-faers-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/marcoss/databricks-faers-radar/actions/workflows/ci.yml)
+![Apache Spark 4.0](https://img.shields.io/badge/Apache%20Spark-4.0-E25A1C?logo=apachespark&logoColor=white)
+![Databricks](https://img.shields.io/badge/Databricks-Free%20Edition-FF3621?logo=databricks&logoColor=white)
+![Delta Lake](https://img.shields.io/badge/Delta%20Lake-4.0-00ADD4)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+**An Apache Spark pipeline that scans ~800K FDA adverse-event reports per run and surfaces
+drug safety signals.** It runs on Databricks serverless, is deployed as code with Asset
+Bundles, and ships with a published AI/BI dashboard.
+
+## What it finds
+
+From the raw reports alone, the pipeline picks up safety stories that made the news:
+
+- **Depo-Provera → meningioma.** Reports for medroxyprogesterone acetate with meningioma
+  rose from **1,172 to 8,496 in one quarter** (2026Q1 → Q2, PRR ≈ 6,700). That spike followed a
+  2024 BMJ study linking the two and the lawsuits that came after it, a textbook case of
+  *stimulated reporting*.
+- **Semaglutide (Ozempic/Wegovy) → eye and stomach effects.** About 200 reports per quarter of
+  **optic ischaemic neuropathy** (PRR 58–349) and 800–1,100 per quarter of **impaired gastric
+  emptying**, both publicly discussed GLP-1 concerns.
+- **Copper IUD → device breakage.** More than 2,000 reports in a quarter each of **device breakage** and
+  **complications of device removal**, matching widely reported Paragard complaints.
+
+> Disproportionality shows that a reaction is reported unusually often with a drug. It does
+> not prove the drug causes it. See [Limitations](#limitations).
+
+## 60-second tour
+
+| If you want to see… | Look at |
+|---|---|
+| The result | [Dashboard screenshot](docs/img/dashboard.png) · [full PDF export](docs/faers-signal-radar.pdf) |
+| The Spark code | [`src/faers_radar/transforms.py`](src/faers_radar/transforms.py): dedup, normalization, PRR/ROR/χ² |
+| The Databricks deployment | [`databricks.yml`](databricks.yml): Unity Catalog schema, volume, serverless job, dashboard |
+| The tests | [`tests/test_transforms.py`](tests/test_transforms.py): statistics checked against hand-computed 2×2 tables |
 
 ![FAERS Signal Radar dashboard on Databricks](docs/img/dashboard.png)
 
-Full dashboard export: [docs/faers-signal-radar.pdf](docs/faers-signal-radar.pdf)
+## Architecture
 
+```mermaid
+flowchart LR
+    FDA["FDA FAERS<br/>quarterly zips"] -->|scripts/download.sh| VOL[("Unity Catalog Volume<br/>raw files")]
+    subgraph JOB["Spark job · Databricks serverless (or local[*])"]
+        B["Bronze<br/>demo · drug · reac · deleted"] --> S["Silver<br/>deduplicated cases<br/>normalized suspect drugs<br/>MedDRA reactions"]
+        S --> G["Gold<br/>gold_signals<br/>PRR · ROR 95% CI · χ²"]
+    end
+    VOL --> B
+    G --> D["AI/BI dashboard<br/>FAERS Signal Radar"]
 ```
-FDA quarterly zips ─► scripts/download.sh ─► data/raw  or  /Volumes/<catalog>/faers/raw
-                                                │
-            bronze_{demo,drug,reac,deleted}     │  every column as string + source_quarter
-                                                ▼
-            silver_cases                        latest version per case, deleted cases removed
-            silver_case_drugs                   suspect drugs, normalized to active ingredient
-            silver_case_reactions               MedDRA preferred terms
-                                                ▼
-            gold_signals                        PRR, ROR (95% CI), chi², is_signal
-                                                per (quarter, drug, reaction)
-```
+
+Every layer is a Delta table in Unity Catalog (`workspace.faers.*`), or a local Delta path when
+running on a laptop.
 
 ## Where Apache Spark is used
 
@@ -50,11 +84,15 @@ drug–reaction pairs. That takes ~47s locally on a MacBook and ~4 min end to en
 | **Delta Lake** | Storage format for every table, locally and in Unity Catalog | [`io.py`](src/faers_radar/io.py) |
 | **AI/BI Dashboards** | Published *FAERS Signal Radar* dashboard (drug explorer and emerging signals) | [`faers_radar.lvdash.json`](src/dashboards/faers_radar.lvdash.json) |
 | **Databricks SQL (serverless warehouse)** | Serves the dashboard queries | [`databricks.yml`](databricks.yml) |
-| **Databricks CLI + GitHub Actions** | Lint and tests on every PR, bundle deploy on merge to `main` | [`ci.yml`](.github/workflows/ci.yml) |
+| **Databricks CLI + GitHub Actions** | Lint and tests on every PR, bundle deploy on merge to `main` | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml) |
 
 Everything runs on **Databricks Free Edition**. The workspace needs a login, so the
 dashboard is also exported as a [screenshot](docs/img/dashboard.png) and a
 [PDF](docs/faers-signal-radar.pdf).
+
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs lint and tests on every PR. Deploys
+([`deploy.yml`](.github/workflows/deploy.yml)) run on merge to `main` and need the
+`DATABRICKS_HOST` and `DATABRICKS_TOKEN` repository secrets.
 
 ## Data
 
@@ -65,6 +103,9 @@ FDA publishes one zip per quarter at
 ```bash
 scripts/download.sh 2024Q1 2026Q2   # 2014Q3 or later; file layout differs before that
 ```
+
+FAERS data is public and published by the U.S. Food and Drug Administration. This project is
+not affiliated with or endorsed by the FDA. Raw data is not stored in this repository.
 
 ## Run locally
 
