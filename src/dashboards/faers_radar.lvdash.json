@@ -107,8 +107,7 @@
               "query": {
                 "datasetName": "ds_quarter",
                 "fields": [
-                  {"name": "sum(reports)", "expression": "SUM(`reports`)"},
-                  {"name": "quarter_start", "expression": "`quarter_start`"}
+                  {"name": "sum(reports)", "expression": "SUM(`reports`)"}
                 ],
                 "disaggregated": false
               }
@@ -121,10 +120,9 @@
                   "fieldName": "sum(reports)",
                   "displayName": "Case reports analyzed",
                   "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
-                },
-                "period": {"fieldName": "quarter_start"}
+                }
               },
-              "frame": {"showTitle": true, "title": "Case reports analyzed", "showDescription": true, "description": "Deduplicated cases, latest quarter (trend behind)"}
+              "frame": {"showTitle": true, "title": "Case reports analyzed", "showDescription": true, "description": "Deduplicated cases, all quarters loaded"}
             }
           },
           "position": {"x": 0, "y": 2, "width": 4, "height": 3}
@@ -228,7 +226,7 @@
               "query": {
                 "datasetName": "ds_drug_quarter",
                 "fields": [
-                  {"name": "quarter_start", "expression": "`quarter_start`"},
+                  {"name": "period", "expression": "`period`"},
                   {"name": "sum(reports)", "expression": "SUM(`reports`)"}
                 ],
                 "disaggregated": false
@@ -238,7 +236,7 @@
               "version": 3,
               "widgetType": "line",
               "encodings": {
-                "x": {"fieldName": "quarter_start", "scale": {"type": "temporal"}, "displayName": "Quarter"},
+                "x": {"fieldName": "period", "scale": {"type": "categorical", "sort": {"by": "natural-order"}}, "displayName": "Quarter"},
                 "y": {"fieldName": "sum(reports)", "scale": {"type": "quantitative"}, "displayName": "Case reports"}
               },
               "frame": {"showTitle": true, "title": "Case reports per quarter"}
@@ -254,7 +252,7 @@
               "query": {
                 "datasetName": "ds_drug_quarter",
                 "fields": [
-                  {"name": "quarter_start", "expression": "`quarter_start`"},
+                  {"name": "period", "expression": "`period`"},
                   {"name": "sum(robust_signals)", "expression": "SUM(`robust_signals`)"}
                 ],
                 "disaggregated": false
@@ -264,7 +262,7 @@
               "version": 3,
               "widgetType": "bar",
               "encodings": {
-                "x": {"fieldName": "quarter_start", "scale": {"type": "temporal"}, "displayName": "Quarter"},
+                "x": {"fieldName": "period", "scale": {"type": "categorical", "sort": {"by": "natural-order"}}, "displayName": "Quarter"},
                 "y": {"fieldName": "sum(robust_signals)", "scale": {"type": "quantitative"}, "displayName": "Robust signals"}
               },
               "frame": {"showTitle": true, "title": "Robust signals per quarter"}
