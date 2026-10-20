@@ -30,7 +30,7 @@ From the raw reports alone, the pipeline picks up safety stories that made the n
 
 | If you want to see… | Look at |
 |---|---|
-| The result | [Dashboard screenshot](docs/img/dashboard.png) · [full PDF export](docs/faers-signal-radar.pdf) |
+| The result | [Drug explorer](docs/img/dashboard.png) · [Emerging signals](docs/img/emerging-signals.png) · [full PDF export](docs/faers-signal-radar.pdf) |
 | The Spark code | [`src/faers_radar/transforms.py`](src/faers_radar/transforms.py): dedup, normalization, PRR/ROR/χ² |
 | The Databricks deployment | [`databricks.yml`](databricks.yml): Unity Catalog schema, volume, serverless job, dashboard |
 | The tests | [`tests/test_transforms.py`](tests/test_transforms.py): statistics checked against hand-computed 2×2 tables |
